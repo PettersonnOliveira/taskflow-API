@@ -43,6 +43,6 @@ Write-Host "Docker push successful!" -ForegroundColor Green
 Write-Host "`n=== Build and Push completed successfully! ===" -ForegroundColor Green
 Write-Host "Image: ${IMAGE_NAME}:${IMAGE_TAG}" -ForegroundColor Cyan
 Write-Host "`nNext steps:" -ForegroundColor Yellow
-Write-Host "1. SSH into your VM: ssh ubuntu@144.22.158.86" -ForegroundColor White
-Write-Host "2. Create database: cd ~/nexus-store && docker compose exec nexus-mysql sh -c 'mysql -u\"\$MYSQL_USER\" -p\"\$MYSQL_PASSWORD\" -e \"CREATE DATABASE IF NOT EXISTS taskflow_db;\"'" -ForegroundColor White
+Write-Host "1. SSH into your VM and open the deployment directory." -ForegroundColor White
+Write-Host "2. Create the taskflow_db database in the existing MySQL container if needed." -ForegroundColor White
 Write-Host "3. Deploy: See DEPLOY-VM-EXISTING.md" -ForegroundColor White
