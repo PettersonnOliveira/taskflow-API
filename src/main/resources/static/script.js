@@ -1,0 +1,336 @@
+// API Configuration
+const API_BASE_URL = window.location.origin;
+
+// Token Management
+const getToken = () => localStorage.getItem('token');
+const setToken = (token) => localStorage.setItem('token', token);
+const removeToken = () => localStorage.removeItem('token');
+const getEmail = () => localStorage.getItem('email');
+const setEmail = (email) => localStorage.setItem('email', email);
+const removeEmail = () => localStorage.removeItem('email');
+const getName = () => localStorage.getItem('name');
+const setName = (name) => localStorage.setItem('name', name);
+const removeName = () => localStorage.removeItem('name');
+
+// API Helper
+async function apiCall(endpoint, options = {}) {
+    const token = getToken();
+    const headers = {
+        'Content-Type': 'application/json',
+        ...options.headers,
+    };
+
+    if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+        ...options,
+        headers,
+    });
+
+    if (!response.ok) {
+        const error = await response.text();
+        throw new Error(error || 'Erro na requisição');
+    }
+
+    return response.json();
+}
+
+// Check if user is authenticated
+function isAuthenticated() {
+    return !!getToken();
+}
+
+// Redirect based on authentication
+function checkAuth() {
+    const currentPath = window.location.pathname;
+    if (isAuthenticated() && currentPath.includes('index.html')) {
+        window.location.href = 'dashboard.html';
+    } else if (!isAuthenticated() && currentPath.includes('dashboard.html')) {
+        window.location.href = 'index.html';
+    }
+}
+
+// Auth Page Logic
+if (document.querySelector('.auth-box')) {
+    // Tab switching
+    const tabBtns = document.querySelectorAll('.tab-btn');
+    const authForms = document.querySelectorAll('.auth-form');
+
+    tabBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const tab = btn.dataset.tab;
+            
+            tabBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            
+            authForms.forEach(form => {
+                form.classList.remove('active');
+                if (form.id === `${tab}Form`) {
+                    form.classList.add('active');
+                }
+            });
+        });
+    });
+
+    // Login Form
+    const loginForm = document.getElementById('loginForm');
+    if (loginForm) {
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const errorEl = document.getElementById('loginError');
+            errorEl.textContent = '';
+            
+            const formData = new FormData(loginForm);
+            const data = Object.fromEntries(formData);
+            
+            try {
+                const response = await apiCall('/auth/login', {
+                    method: 'POST',
+                    body: JSON.stringify(data),
+                });
+                
+                setToken(response.token);
+                setEmail(response.email);
+                setName(response.name);
+                window.location.href = 'dashboard.html';
+            } catch (error) {
+                errorEl.textContent = error.message || 'Erro ao fazer login';
+            }
+        });
+    }
+
+    // Register Form
+    const registerForm = document.getElementById('registerForm');
+    if (registerForm) {
+        registerForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const errorEl = document.getElementById('registerError');
+            errorEl.textContent = '';
+            
+            const formData = new FormData(registerForm);
+            const data = Object.fromEntries(formData);
+            
+            try {
+                const response = await apiCall('/auth/register', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        name: data.name,
+                        email: data.email,
+                        password: data.password
+                    }),
+                });
+                
+                setToken(response.token);
+                setEmail(response.email);
+                setName(response.name);
+                window.location.href = 'dashboard.html';
+            } catch (error) {
+                errorEl.textContent = error.message || 'Erro ao criar conta';
+            }
+        });
+    }
+}
+
+// Dashboard Logic
+if (document.querySelector('.dashboard-container')) {
+    // Display user name
+    const userNameEl = document.getElementById('userName');
+    if (userNameEl && getName()) {
+        userNameEl.textContent = getName();
+    }
+
+    // Logout
+    const logoutBtn = document.getElementById('logoutBtn');
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', () => {
+            removeToken();
+            removeEmail();
+            removeName();
+            window.location.href = 'index.html';
+        });
+    }
+
+    // Load Tasks
+    let allTasks = [];
+    let currentFilter = 'all';
+
+    async function loadTasks() {
+        try {
+            allTasks = await apiCall('/tasks');
+            renderTasks();
+        } catch (error) {
+            console.error('Erro ao carregar tarefas:', error);
+        }
+    }
+
+    function renderTasks() {
+        const tasksList = document.getElementById('tasksList');
+        const noTasks = document.getElementById('noTasks');
+        
+        const filteredTasks = currentFilter === 'all' 
+            ? allTasks 
+            : allTasks.filter(task => task.status === currentFilter);
+        
+        if (filteredTasks.length === 0) {
+            tasksList.innerHTML = '';
+            noTasks.style.display = 'block';
+            return;
+        }
+        
+        noTasks.style.display = 'none';
+        
+        tasksList.innerHTML = filteredTasks.map(task => `
+            <div class="task-card">
+                <div class="task-info">
+                    <div class="task-title">${escapeHtml(task.title)}</div>
+                    ${task.description ? `<div class="task-description">${escapeHtml(task.description)}</div>` : ''}
+                    <div class="task-meta">
+                        <span>Criado: ${formatDate(task.createdAt)}</span>
+                        <span>Atualizado: ${formatDate(task.updatedAt)}</span>
+                    </div>
+                </div>
+                <div class="task-actions">
+                    <span class="task-status status-${task.status}">${translateStatus(task.status)}</span>
+                    <button class="btn btn-sm btn-secondary" onclick="openEditModal(${task.id})">Editar</button>
+                    <button class="btn btn-sm btn-danger" onclick="deleteTask(${task.id})">Excluir</button>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    // Add Task
+    const addTaskForm = document.getElementById('addTaskForm');
+    if (addTaskForm) {
+        addTaskForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = new FormData(addTaskForm);
+            const data = Object.fromEntries(formData);
+            
+            try {
+                await apiCall('/tasks', {
+                    method: 'POST',
+                    body: JSON.stringify(data),
+                });
+                
+                addTaskForm.reset();
+                loadTasks();
+            } catch (error) {
+                alert('Erro ao criar tarefa: ' + error.message);
+            }
+        });
+    }
+
+    // Filter Tasks
+    const filterBtns = document.querySelectorAll('.filter-btn');
+    filterBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            filterBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            currentFilter = btn.dataset.filter;
+            renderTasks();
+        });
+    });
+
+    // Edit Modal
+    const editModal = document.getElementById('editModal');
+    const editTaskForm = document.getElementById('editTaskForm');
+    const closeModals = document.querySelectorAll('.close-modal, .close-modal-btn');
+
+    window.openEditModal = async (taskId) => {
+        try {
+            const task = await apiCall(`/tasks/${taskId}`);
+            document.getElementById('editTaskId').value = task.id;
+            document.getElementById('editTitle').value = task.title;
+            document.getElementById('editDescription').value = task.description || '';
+            document.getElementById('editStatus').value = task.status;
+            editModal.classList.add('active');
+        } catch (error) {
+            alert('Erro ao carregar tarefa: ' + error.message);
+        }
+    };
+
+    closeModals.forEach(btn => {
+        btn.addEventListener('click', () => {
+            editModal.classList.remove('active');
+        });
+    });
+
+    editModal.addEventListener('click', (e) => {
+        if (e.target === editModal) {
+            editModal.classList.remove('active');
+        }
+    });
+
+    editTaskForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const taskId = document.getElementById('editTaskId').value;
+        const formData = new FormData(editTaskForm);
+        const data = Object.fromEntries(formData);
+        delete data.id;
+        
+        try {
+            await apiCall(`/tasks/${taskId}`, {
+                method: 'PUT',
+                body: JSON.stringify(data),
+            });
+            
+            editModal.classList.remove('active');
+            loadTasks();
+        } catch (error) {
+            alert('Erro ao atualizar tarefa: ' + error.message);
+        }
+    });
+
+    // Delete Task
+    window.deleteTask = async (taskId) => {
+        if (!confirm('Tem certeza que deseja excluir esta tarefa?')) {
+            return;
+        }
+        
+        try {
+            await apiCall(`/tasks/${taskId}`, {
+                method: 'DELETE',
+            });
+            loadTasks();
+        } catch (error) {
+            alert('Erro ao excluir tarefa: ' + error.message);
+        }
+    };
+
+    // Initial load
+    loadTasks();
+}
+
+// Utility Functions
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function formatDate(dateString) {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+}
+
+function translateStatus(status) {
+    const translations = {
+        'PENDING': 'Pendente',
+        'IN_PROGRESS': 'Em Progresso',
+        'COMPLETED': 'Concluída'
+    };
+    return translations[status] || status;
+}
+
+// Check authentication on page load
+checkAuth();

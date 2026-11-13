@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Exec(mkdir)",
+      "Exec(netstat)",
+      "Exec(mvn)",
+      "Exec(robocopy)",
+      "Exec(powershell)",
+      "Exec(rmdir)",
+      "Exec(scp)",
+      "Exec(ssh)"
+    ]
+  }
+}

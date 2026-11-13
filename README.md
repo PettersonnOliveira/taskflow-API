@@ -12,6 +12,9 @@ Com ela é possível criar, listar, consultar, atualizar e remover tarefas, serv
 - Persistência com MySQL + JPA/Hibernate
 - Validação de dados com Bean Validation
 - Respostas HTTP apropriadas para cada operação
+- Autenticação com Spring Security + JWT
+- Frontend funcional e estético integrado
+- Docker pronto para deploy na OCI
 
 ## 🛠️ Tecnologias
 
@@ -21,6 +24,8 @@ Com ela é possível criar, listar, consultar, atualizar e remover tarefas, serv
 - Spring Data JPA
 - Bean Validation
 - MySQL
+- Spring Security
+- JWT (JSON Web Token)
 - Maven
 
 ## 🏗️ Arquitetura
@@ -43,7 +48,9 @@ src/main/java/com/portfolio/TaskFlow/API
 ├── Dto
 ├── Entities
 ├── Repositories
-└── Services
+├── Services
+├── config
+└── security
 ```
 
 ## 📋 Modelo de dados
@@ -74,6 +81,10 @@ src/main/java/com/portfolio/TaskFlow/API
 | Buscar por ID | `GET` | `/tasks/{id}` |
 | Atualizar tarefa | `PUT` | `/tasks/{id}` |
 | Excluir tarefa | `DELETE` | `/tasks/{id}` |
+| Cadastrar usuário | `POST` | `/auth/register` |
+| Autenticar usuário | `POST` | `/auth/login` |
+
+Todos os endpoints de `/tasks` exigem o cabeçalho `Authorization: Bearer <token>`.
 
 ## 📨 Exemplos de requisição
 
@@ -149,6 +160,15 @@ spring.jpa.hibernate.ddl-auto=update
 
 > Em ambientes reais, prefira variáveis de ambiente para não versionar credenciais.
 
+Configure também uma chave JWT com pelo menos 32 caracteres:
+
+```powershell
+$env:JWT_SECRET = "uma-chave-secreta-com-pelo-menos-32-caracteres"
+```
+
+O tempo de expiração padrão do token é de 24 horas e pode ser alterado pela variável
+`JWT_EXPIRATION`, em milissegundos.
+
 ### 3. Executar a aplicação
 
 No Windows PowerShell:
@@ -182,9 +202,64 @@ Ferramentas recomendadas:
 
 - [ ] Tratamento global de exceções
 - [ ] Filtro por status
-- [ ] Autenticação com Spring Security + JWT
+- [x] Autenticação com Spring Security + JWT
+- [x] Frontend integrado
+- [x] Docker e configuração para OCI
 - [ ] Campos de prioridade, prazo e responsável
 - [ ] Padronização de respostas de erro
+
+## 🚀 Deploy na VM Existente (144.22.158.86)
+
+Este projeto está configurado para deploy na sua VM que já tem o nexus-store e MySQL rodando.
+
+### Estratégia
+
+- **Porta**: 8081 (8080 ocupada pelo nexus-api)
+- **MySQL**: Reutiliza o container `nexus-mysql` existente
+- **Database**: Cria schema `taskflow_db` no MySQL existente
+- **Network**: Conecta à rede `nexus-store_default`
+- **Benefício**: Economia de ~300-400MB RAM
+
+### Deploy Rápido
+
+```powershell
+# Passo 1: Build e Push (Windows PowerShell)
+.\build-and-push.ps1
+```
+
+```bash
+# Passo 2: Criar database (na VM)
+ssh ubuntu@144.22.158.86
+cd ~/nexus-store
+docker compose exec nexus-mysql sh -c 'mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" -e "CREATE DATABASE IF NOT EXISTS taskflow_db;"'
+```
+
+```bash
+# Passo 3: Deploy (automatizado)
+chmod +x deploy-to-vm.sh
+./deploy-to-vm.sh
+```
+
+### Documentação Completa
+
+Para guia detalhado, veja [DEPLOY-VM-EXISTING.md](DEPLOY-VM-EXISTING.md).
+
+### Frontend
+
+O frontend está integrado na aplicação e servido automaticamente em `src/main/resources/static/`. Quando a API inicia, o frontend é acessível diretamente na URL base.
+
+### Docker
+
+```bash
+# Build da imagem
+docker build -t taskflow-api:latest .
+
+# Executar com docker-compose
+docker-compose up -d
+
+# Para produção (com MySQL externo)
+docker-compose -f docker-compose.prod.yml up -d
+```
 
 ## 📚 O que este projeto demonstra
 
