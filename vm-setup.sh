@@ -15,9 +15,9 @@ cd ~/taskflow-api
 cat << 'EOF' > .env
 SPRING_PROFILES_ACTIVE=prod
 DB_NAME=taskflow_db
-DB_USER=nexus_user
-DB_PASSWORD=0addf195baa802923837e71fb899c29921fd7a4bc18c2d40
-JWT_SECRET=taskflow-api-secret-key-2026-petter-dev-portfolio-min-32-chars
+DB_USER=replace_with_mysql_user
+DB_PASSWORD=replace_with_mysql_password
+JWT_SECRET=replace_with_a_random_secret_of_at_least_32_characters
 JWT_EXPIRATION=86400000
 EOF
 
