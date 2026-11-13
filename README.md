@@ -1,6 +1,6 @@
 # 🚀 TaskFlow API
 
-API REST para gerenciamento de tarefas, desenvolvida como projeto de portfólio com foco em organização, clareza e boas práticas de backend com Java e Spring Boot.
+API REST para gerenciamento de tarefas, desenvolvida como projeto de portfólio com Java 21 e Spring Boot 4, com autenticação JWT, frontend estático integrado e suporte a execução com Docker.
 
 Com ela é possível criar, listar, consultar, atualizar e remover tarefas, servindo como base para um sistema de produtividade mais completo no futuro.
 
@@ -14,7 +14,7 @@ Com ela é possível criar, listar, consultar, atualizar e remover tarefas, serv
 - Respostas HTTP apropriadas para cada operação
 - Autenticação com Spring Security + JWT
 - Frontend funcional e estético integrado
-- Docker pronto para deploy na OCI
+- Docker pronto para deploy em uma VM com Docker
 
 ## 🛠️ Tecnologias
 
@@ -31,14 +31,15 @@ Com ela é possível criar, listar, consultar, atualizar e remover tarefas, serv
 ## 🏗️ Arquitetura
 
 ```text
-Controller → Service → Repository → Banco de Dados
+Frontend → API REST → Service → Repository → MySQL
 ```
 
 - **Controller**: expõe os endpoints HTTP
 - **Service**: concentra as regras de negócio
 - **Repository**: realiza o acesso aos dados
 - **DTOs**: controlam o formato de entrada e saída
-- **Entity**: representa a tabela `task`
+- **Entities**: representam a tabela `task` e a tabela `users`
+- **Security**: implementa autenticação stateless com Spring Security e JWT
 
 ## 📦 Estrutura do projeto
 
@@ -52,6 +53,8 @@ src/main/java/com/portfolio/TaskFlow/API
 ├── config
 └── security
 ```
+
+O frontend está em `src/main/resources/static/` e é servido pela própria aplicação Spring Boot.
 
 ## 📋 Modelo de dados
 
@@ -72,6 +75,16 @@ src/main/java/com/portfolio/TaskFlow/API
 - `TaskUpdateDTO`: usado na atualização
 - `TaskResponseDTO`: formato da resposta da API
 
+### `User`
+
+| Campo | Tipo | Descrição |
+|---|---|---|
+| `id` | `Long` | Identificador do usuário |
+| `name` | `String` | Nome do usuário |
+| `email` | `String` | E-mail único usado no login |
+| `password` | `String` | Senha armazenada com BCrypt |
+| `role` | `Enum` | `USER` ou `ADMIN` |
+
 ## 📌 Endpoints
 
 | Ação | Método | Rota |
@@ -84,7 +97,43 @@ src/main/java/com/portfolio/TaskFlow/API
 | Cadastrar usuário | `POST` | `/auth/register` |
 | Autenticar usuário | `POST` | `/auth/login` |
 
-Todos os endpoints de `/tasks` exigem o cabeçalho `Authorization: Bearer <token>`.
+Os endpoints de `/auth/**` são públicos. Os endpoints de `/tasks` exigem o cabeçalho `Authorization: Bearer <token>`.
+
+### Cadastrar usuário
+
+**POST** `/auth/register`
+
+```json
+{
+  "name": "Maria Silva",
+  "email": "maria@example.com",
+  "password": "senha-segura"
+}
+```
+
+### Autenticar usuário
+
+**POST** `/auth/login`
+
+```json
+{
+  "email": "maria@example.com",
+  "password": "senha-segura"
+}
+```
+
+A resposta de cadastro e login contém um token JWT:
+
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiJ9...",
+  "tokenType": "Bearer",
+  "userId": 1,
+  "name": "Maria Silva",
+  "email": "maria@example.com",
+  "role": "USER"
+}
+```
 
 ## 📨 Exemplos de requisição
 
@@ -147,27 +196,30 @@ git clone <url-do-repositorio>
 
 ### 2. Configurar o banco
 
-Edite `src/main/resources/application.properties`:
+Configure o banco e as variáveis de ambiente. O arquivo
+`src/main/resources/application.properties` usa:
 
 ```properties
-spring.application.name=TaskFlow-API
 spring.datasource.url=jdbc:mysql://localhost:3306/taskflow_db?createDatabaseIfNotExist=true
-spring.datasource.username=SEU_USUARIO
-spring.datasource.password=SUA_SENHA
+spring.datasource.username=root
+spring.datasource.password=${MINHA_SENHA}
 spring.jpa.show-sql=true
 spring.jpa.hibernate.ddl-auto=update
+jwt.secret=${JWT_SECRET}
+jwt.expiration=${JWT_EXPIRATION:86400000}
 ```
 
-> Em ambientes reais, prefira variáveis de ambiente para não versionar credenciais.
-
-Configure também uma chave JWT com pelo menos 32 caracteres:
+Defina as variáveis antes de iniciar a aplicação. A chave JWT deve ter pelo menos 32 caracteres:
 
 ```powershell
+$env:MINHA_SENHA = "sua-senha-do-mysql"
 $env:JWT_SECRET = "uma-chave-secreta-com-pelo-menos-32-caracteres"
+$env:JWT_EXPIRATION = "86400000"
 ```
 
-O tempo de expiração padrão do token é de 24 horas e pode ser alterado pela variável
-`JWT_EXPIRATION`, em milissegundos.
+`JWT_EXPIRATION` é opcional, usa milissegundos e tem valor padrão de 24 horas.
+Nunca versione credenciais ou chaves reais. Para o ambiente com Docker e MySQL externo,
+consulte [.env.shared-mysql.example](.env.shared-mysql.example).
 
 ### 3. Executar a aplicação
 
@@ -191,7 +243,19 @@ http://localhost:8080
 
 ## 🧪 Testes da API
 
-Ferramentas recomendadas:
+Execute os testes automatizados com:
+
+```powershell
+.\mvnw.cmd test
+```
+
+Em sistemas Unix-like:
+
+```bash
+./mvnw test
+```
+
+Para testar os endpoints manualmente, use:
 
 - Postman
 - Insomnia
@@ -208,58 +272,44 @@ Ferramentas recomendadas:
 - [ ] Campos de prioridade, prazo e responsável
 - [ ] Padronização de respostas de erro
 
-## 🚀 Deploy na VM Existente (144.22.158.86)
+## 🚀 Deploy com Docker
 
-Este projeto está configurado para deploy na sua VM que já tem o nexus-store e MySQL rodando.
+### Execução local com a imagem
 
-### Estratégia
+```bash
+docker build -t taskflow-api:latest .
+docker run --rm -p 8080:8080 \
+  -e MINHA_SENHA="sua-senha-do-mysql" \
+  -e JWT_SECRET="uma-chave-secreta-com-pelo-menos-32-caracteres" \
+  taskflow-api:latest
+```
 
-- **Porta**: 8081 (8080 ocupada pelo nexus-api)
-- **MySQL**: Reutiliza o container `nexus-mysql` existente
-- **Database**: Cria schema `taskflow_db` no MySQL existente
-- **Network**: Conecta à rede `nexus-store_default`
-- **Benefício**: Economia de ~300-400MB RAM
+### Deploy em VM com MySQL externo
 
-### Deploy Rápido
+O arquivo `docker-compose.shared-mysql.yml` configura a aplicação para reutilizar
+um MySQL externo acessível pelo container `nexus-mysql`. Copie o arquivo de exemplo
+e preencha os valores reais:
+
+```bash
+cp .env.shared-mysql.example .env
+docker compose -f docker-compose.shared-mysql.yml --env-file .env up -d
+```
+
+No Windows PowerShell, o build e o envio da imagem para o Docker Hub podem ser feitos com:
 
 ```powershell
-# Passo 1: Build e Push (Windows PowerShell)
 .\build-and-push.ps1
 ```
 
-```bash
-# Passo 2: Criar database (na VM)
-ssh ubuntu@144.22.158.86
-cd ~/nexus-store
-docker compose exec nexus-mysql sh -c 'mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" -e "CREATE DATABASE IF NOT EXISTS taskflow_db;"'
-```
+O compose publica a aplicação na porta `8081` da VM e usa a porta `8080` internamente.
+O Docker Hub utilizado pelo script é `devpetter/taskflow-api`.
 
-```bash
-# Passo 3: Deploy (automatizado)
-chmod +x deploy-to-vm.sh
-./deploy-to-vm.sh
-```
+Para um ambiente com uma instalação existente do Nexus Store, a rede Docker externa
+deve existir com o nome configurado em `docker-compose.shared-mysql.yml`:
 
-### Documentação Completa
-
-Para guia detalhado, veja [DEPLOY-VM-EXISTING.md](DEPLOY-VM-EXISTING.md).
-
-### Frontend
-
-O frontend está integrado na aplicação e servido automaticamente em `src/main/resources/static/`. Quando a API inicia, o frontend é acessível diretamente na URL base.
-
-### Docker
-
-```bash
-# Build da imagem
-docker build -t taskflow-api:latest .
-
-# Executar com docker-compose
-docker-compose up -d
-
-# Para produção (com MySQL externo)
-docker-compose -f docker-compose.prod.yml up -d
-```
+Para o procedimento completo de uma VM já existente, consulte
+[DEPLOY-VM-EXISTING.md](DEPLOY-VM-EXISTING.md) e
+[DEPLOYMENT-OPTIONS.md](DEPLOYMENT-OPTIONS.md).
 
 ## 📚 O que este projeto demonstra
 
@@ -268,6 +318,9 @@ docker-compose -f docker-compose.prod.yml up -d
 - CRUD com Spring Data JPA
 - Validação de entrada com Bean Validation
 - Integração com banco relacional MySQL
+- Autenticação stateless com Spring Security e JWT
+- Frontend estático servido pela API
+- Containerização com Docker e execução em VM
 
 ---
 
