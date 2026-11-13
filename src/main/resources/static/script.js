@@ -20,7 +20,8 @@ async function apiCall(endpoint, options = {}) {
         ...options.headers,
     };
 
-    if (token) {
+    const isPublicAuthEndpoint = endpoint.startsWith('/auth/');
+    if (token && !isPublicAuthEndpoint) {
         headers['Authorization'] = `Bearer ${token}`;
     }
 
@@ -31,6 +32,11 @@ async function apiCall(endpoint, options = {}) {
 
     if (!response.ok) {
         const error = await response.text();
+        if (response.status === 401 && !isPublicAuthEndpoint) {
+            removeToken();
+            removeEmail();
+            removeName();
+        }
         throw new Error(error || 'Erro na requisição');
     }
 
