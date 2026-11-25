@@ -44,8 +44,14 @@
 			<artifactId>spring-boot-starter-webmvc</artifactId>
 		</dependency>
         <dependency>
-            <groupId>com.mysql</groupId>
-            <artifactId>mysql-connector-j</artifactId>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <!-- Flyway PostgreSQL support (add if Flyway is used) -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-database-postgresql</artifactId>
             <scope>runtime</scope>
         </dependency>
 		<dependency>
