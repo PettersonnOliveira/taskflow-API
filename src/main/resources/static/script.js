@@ -1,5 +1,131 @@
 // API Configuration
 const API_BASE_URL = window.location.origin;
+const API_TIMEOUT_MS = 70000; // >= 65s to accommodate cloud server cold start
+const PING_BANNER_DELAY_MS = 2500;
+const REQUEST_BANNER_DELAY_MS = 3000;
+const CONNECTED_TOAST_DURATION_MS = 2000;
+
+// Server Wake-Up Toast Management
+const serverStatusUI = (() => {
+    let toastEl = null;
+    let messageEl = null;
+    let hideTimeoutId = null;
+    let activeSlowCount = 0;
+
+    function ensureElements() {
+        if (toastEl) return;
+        toastEl = document.createElement('div');
+        toastEl.className = 'server-toast';
+        toastEl.setAttribute('role', 'status');
+        toastEl.setAttribute('aria-live', 'polite');
+
+        const spinnerEl = document.createElement('span');
+        spinnerEl.className = 'server-toast-spinner';
+        spinnerEl.setAttribute('aria-hidden', 'true');
+
+        messageEl = document.createElement('span');
+        messageEl.className = 'server-toast-message';
+
+        toastEl.appendChild(spinnerEl);
+        toastEl.appendChild(messageEl);
+        document.body.appendChild(toastEl);
+    }
+
+    function showConnecting(message) {
+        ensureElements();
+        if (hideTimeoutId) {
+            clearTimeout(hideTimeoutId);
+            hideTimeoutId = null;
+        }
+        toastEl.classList.remove('connected');
+        messageEl.textContent = message;
+        toastEl.classList.add('visible');
+    }
+
+    function showConnectedAndClose() {
+        if (!toastEl || !toastEl.classList.contains('visible')) return;
+        if (hideTimeoutId) {
+            clearTimeout(hideTimeoutId);
+        }
+        toastEl.classList.add('connected');
+        messageEl.textContent = '✅ Servidor conectado!';
+        hideTimeoutId = setTimeout(() => {
+            toastEl.classList.remove('visible', 'connected');
+            hideTimeoutId = null;
+        }, CONNECTED_TOAST_DURATION_MS);
+    }
+
+    function hideImmediately() {
+        if (!toastEl) return;
+        if (hideTimeoutId) {
+            clearTimeout(hideTimeoutId);
+            hideTimeoutId = null;
+        }
+        toastEl.classList.remove('visible', 'connected');
+    }
+
+    function beginSlowOperation(message) {
+        activeSlowCount += 1;
+        showConnecting(message);
+    }
+
+    function endSlowOperation(succeeded) {
+        activeSlowCount = Math.max(0, activeSlowCount - 1);
+        if (activeSlowCount === 0) {
+            if (succeeded) {
+                showConnectedAndClose();
+            } else {
+                hideImmediately();
+            }
+        }
+    }
+
+    return {
+        beginSlowOperation,
+        endSlowOperation,
+    };
+})();
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = API_TIMEOUT_MS) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+        return await fetch(url, {
+            ...options,
+            signal: controller.signal,
+        });
+    } finally {
+        clearTimeout(timeoutId);
+    }
+}
+
+async function pingServerOnStartup() {
+    let slowTriggered = false;
+    let reachedServer = false;
+
+    const slowTimer = setTimeout(() => {
+        slowTriggered = true;
+        serverStatusUI.beginSlowOperation(
+            '⏳ Iniciando o servidor na nuvem... O primeiro acesso pode levar até 50 segundos. Aguarde um instante.'
+        );
+    }, PING_BANNER_DELAY_MS);
+
+    try {
+        await fetchWithTimeout(`${API_BASE_URL}/`, {
+            method: 'GET',
+            cache: 'no-store',
+        });
+        reachedServer = true;
+    } catch (error) {
+        console.warn('Ping inicial ao servidor falhou:', error.message);
+    } finally {
+        clearTimeout(slowTimer);
+        if (slowTriggered) {
+            serverStatusUI.endSlowOperation(reachedServer);
+        }
+    }
+}
 
 // Token Management
 const getToken = () => localStorage.getItem('token');
@@ -25,10 +151,33 @@ async function apiCall(endpoint, options = {}) {
         headers['Authorization'] = `Bearer ${token}`;
     }
 
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-        ...options,
-        headers,
-    });
+    let slowTriggered = false;
+    let reachedServer = false;
+    const slowTimer = setTimeout(() => {
+        slowTriggered = true;
+        serverStatusUI.beginSlowOperation(
+            '⏳ Conectando ao servidor... Aguarde enquanto a API finaliza a inicialização.'
+        );
+    }, REQUEST_BANNER_DELAY_MS);
+
+    let response;
+    try {
+        response = await fetchWithTimeout(`${API_BASE_URL}${endpoint}`, {
+            ...options,
+            headers,
+        });
+        reachedServer = true;
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            throw new Error('Tempo limite de conexão excedido. Tente novamente em instantes.');
+        }
+        throw new Error('Não foi possível conectar ao servidor. Tente novamente em instantes.');
+    } finally {
+        clearTimeout(slowTimer);
+        if (slowTriggered) {
+            serverStatusUI.endSlowOperation(reachedServer);
+        }
+    }
 
     if (!response.ok) {
         const error = await response.text();
@@ -53,9 +202,12 @@ function checkAuth() {
     const currentPath = window.location.pathname;
     if (isAuthenticated() && currentPath.includes('index.html')) {
         window.location.href = 'dashboard.html';
+        return true;
     } else if (!isAuthenticated() && currentPath.includes('dashboard.html')) {
         window.location.href = 'index.html';
+        return true;
     }
+    return false;
 }
 
 // Auth Page Logic
@@ -338,5 +490,7 @@ function translateStatus(status) {
     return translations[status] || status;
 }
 
-// Check authentication on page load
-checkAuth();
+// Check authentication on page load and proactively wake up server
+if (!checkAuth()) {
+    pingServerOnStartup();
+}

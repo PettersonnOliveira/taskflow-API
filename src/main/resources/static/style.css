@@ -467,3 +467,71 @@ body {
         justify-content: flex-end;
     }
 }
+
+/* Server Status Toast (Cold Start UX) */
+.server-toast {
+    position: fixed;
+    top: 1.25rem;
+    right: 1.25rem;
+    z-index: 1100;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    max-width: 400px;
+    padding: 0.875rem 1.125rem;
+    background: var(--surface);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    border-left: 4px solid var(--primary-color);
+    border-radius: 0.75rem;
+    box-shadow: var(--shadow-lg);
+    font-size: 0.875rem;
+    line-height: 1.45;
+    opacity: 0;
+    transform: translateY(-0.75rem);
+    pointer-events: none;
+    transition: opacity 0.25s ease, transform 0.25s ease, border-color 0.25s ease;
+}
+
+.server-toast.visible {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+}
+
+.server-toast.connected {
+    border-left-color: var(--success-color);
+}
+
+.server-toast-spinner {
+    width: 1.125rem;
+    height: 1.125rem;
+    flex-shrink: 0;
+    border: 2.5px solid var(--border-color);
+    border-top-color: var(--primary-color);
+    border-radius: 50%;
+    animation: server-toast-spin 0.8s linear infinite;
+}
+
+.server-toast.connected .server-toast-spinner {
+    display: none;
+}
+
+.server-toast-message {
+    flex: 1;
+}
+
+@keyframes server-toast-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@media (max-width: 768px) {
+    .server-toast {
+        top: 0.75rem;
+        left: 0.75rem;
+        right: 0.75rem;
+        max-width: none;
+    }
+}
