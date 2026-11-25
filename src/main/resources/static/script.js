@@ -1,5 +1,7 @@
 // API Configuration
-const API_BASE_URL = window.location.origin;
+const RENDER_API_URL = 'https://taskflow-api.onrender.com';
+const isLocalHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+const API_BASE_URL = isLocalHost ? window.location.origin : RENDER_API_URL;
 const API_TIMEOUT_MS = 70000; // >= 65s to accommodate cloud server cold start
 const PING_BANNER_DELAY_MS = 2500;
 const REQUEST_BANNER_DELAY_MS = 3000;
