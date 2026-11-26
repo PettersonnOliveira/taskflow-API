@@ -103,6 +103,9 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = API_TIMEOUT_MS) {
 }
 
 async function pingServerOnStartup() {
+    // The ping checks server availability regardless of HTTP status (e.g., 200, 403, 404).
+    // Any resolved fetch call counts as the server being reachable, ensuring the banner clears.
+
     let slowTriggered = false;
     let reachedServer = false;
 
@@ -142,6 +145,16 @@ const removeName = () => localStorage.removeItem('name');
 
 // API Helper
 async function apiCall(endpoint, options = {}) {
+    const token = getToken();
+    console.log('apiCall token:', token);
+    const headers = {
+        'Content-Type': 'application/json',
+        ...options.headers,
+    };
+    const isPublicAuthEndpoint = endpoint.startsWith('/auth/');
+    if (token && !isPublicAuthEndpoint) {
+        headers['Authorization'] = `Bearer ${token}`;
+    }
     const token = getToken();
     const headers = {
         'Content-Type': 'application/json',
@@ -251,7 +264,7 @@ if (document.querySelector('.auth-box')) {
                     body: JSON.stringify(data),
                 });
                 
-                setToken(response.token);
+                setToken(response.token ?? response.jwt);
                 setEmail(response.email);
                 setName(response.name);
                 window.location.href = 'dashboard.html';
@@ -282,7 +295,7 @@ if (document.querySelector('.auth-box')) {
                     }),
                 });
                 
-                setToken(response.token);
+                setToken(response.token ?? response.jwt);
                 setEmail(response.email);
                 setName(response.name);
                 window.location.href = 'dashboard.html';

@@ -207,6 +207,8 @@ spring.jpa.show-sql=true
 spring.jpa.hibernate.ddl-auto=update
 jwt.secret=${JWT_SECRET}
 jwt.expiration=${JWT_EXPIRATION:86400000}
+admin.email=${ADMIN_EMAIL:admin@sistema.com}
+admin.password=${ADMIN_PASSWORD:}
 ```
 
 Defina as variáveis antes de iniciar a aplicação. A chave JWT deve ter pelo menos 32 caracteres:
@@ -215,9 +217,14 @@ Defina as variáveis antes de iniciar a aplicação. A chave JWT deve ter pelo m
 $env:MINHA_SENHA = "sua-senha-do-mysql"
 $env:JWT_SECRET = "uma-chave-secreta-com-pelo-menos-32-caracteres"
 $env:JWT_EXPIRATION = "86400000"
+$env:ADMIN_EMAIL = "admin@sistema.com"
+$env:ADMIN_PASSWORD = "uma-senha-forte-para-o-admin"
 ```
 
 `JWT_EXPIRATION` é opcional, usa milissegundos e tem valor padrão de 24 horas.
+`ADMIN_EMAIL` é opcional e usa `admin@sistema.com` como padrão. O usuário
+administrador só é criado no startup se `ADMIN_PASSWORD` estiver definida; caso
+contrário, a criação é apenas registrada em log e ignorada.
 Nunca versione credenciais ou chaves reais. Para o ambiente com Docker e MySQL externo,
 consulte [.env.shared-mysql.example](.env.shared-mysql.example).
 
