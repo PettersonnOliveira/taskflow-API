@@ -19,5 +19,4 @@ USER spring:spring
 
 EXPOSE 8080
 
-ENTRYPOINT ["dumb-init", "--"]
-CMD ["java", "-Xmx512m", "-Xms256m", "-jar", "app.jar"]
+ENTRYPOINT ["java", "-Xmx300m", "-Xms128m", "-XX:+UseSerialGC", "-XX:TieredStopAtLevel=1", "-Djava.security.egd=file:/dev/./urandom", "-jar", "app.jar"]
